@@ -1,0 +1,3 @@
+yarn
+yarn add react-select
+npx prisma generate

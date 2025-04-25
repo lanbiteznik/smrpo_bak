@@ -1,0 +1,51 @@
+{
+  "name": "scrum-board",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@popperjs/core": "^2.11.8",
+    "@prisma/client": "^6.6.0",
+    "bcryptjs": "^3.0.2",
+    "bootstrap": "^5.3.3",
+    "chart.js": "^4.4.8",
+    "dotenv": "^16.4.7",
+    "github-markdown-css": "^5.8.1",
+    "next": "15.2.0",
+    "next-auth": "^4.24.11",
+    "react": "^18.3.1",
+    "react-beautiful-dnd": "^13.1.1",
+    "react-bootstrap": "^2.10.9",
+    "react-bootstrap-icons": "^1.11.5",
+    "react-chartjs-2": "^5.3.0",
+    "react-dom": "^18.3.1",
+    "react-icons": "^5.5.0",
+    "react-markdown": "^10.1.0",
+    "react-select": "^5.10.1",
+    "remark-gfm": "^4.0.1",
+    "scrum-board": "file:"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3",
+    "@tailwindcss/postcss": "^4",
+    "@types/bootstrap": "^5.2.10",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-beautiful-dnd": "^13.1.8",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "15.2.0",
+    "prisma": "^6.6.0",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  },
+  "main": "index.js",
+  "repository": "https://github.com/zan-luka/smrpo-projekt.git",
+  "author": "zan-luka <zanluka.nusdorfer@gmail.com>",
+  "license": "MIT"
+}

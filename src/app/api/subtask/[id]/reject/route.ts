@@ -1,0 +1,60 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { PrismaClient } from '@prisma/client';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/authOptions';
+
+const prisma = new PrismaClient();
+
+// Update the rejection endpoint to allow rejecting pending tasks
+export async function PUT(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  try {
+    // Get the current user session
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { id: rawId } = await ctx.params;      // ctx.params is already Promise<{id:string}>
+    const subtaskId = parseInt(rawId, 10);
+    
+    // Check if the subtask exists
+    const subtask = await prisma.subtask.findUnique({
+      where: { id: subtaskId }
+    });
+
+    if (!subtask) {
+      return NextResponse.json({ error: 'Subtask not found' }, { status: 404 });
+    }
+
+    // Check if the subtask is assigned to the current user
+    const currentUserId = typeof session.user.id === 'string' ? parseInt(session.user.id) : session.user.id;
+    if (subtask.assignee !== currentUserId) {
+      return NextResponse.json({ 
+        error: 'You can only reject tasks assigned to you' 
+      }, { status: 400 });
+    }
+    
+    // Update the subtask to mark as rejected
+    const updatedSubtask = await prisma.subtask.update({
+      where: { id: subtaskId },
+      data: {
+        rejected: true,
+        assignee: null,
+        accepted: false,
+      },      
+      include: {
+        person: {
+          select: {
+            name: true,
+            lastname: true
+          }
+        }
+      }
+    });
+
+    return NextResponse.json(updatedSubtask);
+  } catch (error) {
+    console.error('Error rejecting subtask:', error);
+    return NextResponse.json({ error: 'Failed to reject subtask' }, { status: 500 });
+  }
+}

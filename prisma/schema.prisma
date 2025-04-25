@@ -1,0 +1,146 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model person {
+  id             Int             @id @default(autoincrement())
+  username       String          @db.VarChar(64)
+  email          String          @db.VarChar(127)
+  password       String          @db.VarChar(255)
+  name           String          @db.VarChar(32)
+  lastname       String          @db.VarChar(32)
+  role           Int
+  projects       String?
+  last_login     DateTime?       @db.Timestamp(6)
+  previous_login DateTime?       @db.Timestamp(6)
+  active         Boolean?
+  post_comments  post_comment[]
+  subtasks       subtask[]
+  task_time_log  task_time_log[]
+  wall_posts     wall_post[]
+
+  @@map("person")
+}
+
+model project {
+  id          Int         @id @default(autoincrement())
+  title       String?     @db.VarChar(64)
+  description String?
+  tickets     String?
+  sprints     String?
+  users       String?
+  created_at  DateTime?   @db.Timestamp(6)
+  docs        String?
+  active      Boolean?
+  comments    String?
+  sprintsRel  sprint[]
+  storiesRel  story[]
+  wall_posts  wall_post[]
+}
+
+model story {
+  id                     Int       @id @default(autoincrement())
+  title                  String?   @db.VarChar(64)
+  description            String?
+  time_required          Int?
+  assignee               String?   @db.VarChar(255)
+  priority               Int?
+  business_value         Int?
+  subtaskscount          Int?
+  tests                  String?
+  created_at             DateTime? @db.Timestamp(6)
+  project_id             Int?
+  active                 Boolean?
+  finished               Boolean?
+  sprint_id              Int?
+  rejected               Boolean?
+  rejected_time_required Int?
+  rejected_description   String?
+  project                project?  @relation(fields: [project_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sprint                 sprint?   @relation(fields: [sprint_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  subtasks               subtask[]
+}
+
+model subtask {
+  id            Int             @id @default(autoincrement())
+  description   String?
+  time_required Int?
+  assignee      Int?
+  priority      Int?
+  created_at    DateTime?       @db.Timestamp(6)
+  story_id      Int?
+  finished      Boolean?
+  rejected      Boolean?
+  accepted      Boolean?
+  person        person?         @relation(fields: [assignee], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  story         story?          @relation(fields: [story_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  task_time_log task_time_log[]
+  task_history  task_history[]
+}
+
+model sprint {
+  id          Int       @id @default(autoincrement())
+  title       String?   @db.VarChar(255)
+  start_date  DateTime? @db.Timestamp(6)
+  finish_date DateTime? @db.Timestamp(6)
+  velocity    Int?
+  tickets     String?
+  project_id  Int?
+  active      Boolean?
+  project     project?  @relation(fields: [project_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  stories     story[]
+}
+
+model wall_post {
+  id          Int            @id @default(autoincrement())
+  title       String?        @db.VarChar(64)
+  description String?
+  created_at  DateTime?      @db.Timestamp(6)
+  project_id  Int?
+  person_id   Int?
+  comments    post_comment[]
+  person      person?        @relation(fields: [person_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  project     project?       @relation(fields: [project_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model post_comment {
+  id           Int        @id @default(autoincrement())
+  description  String?
+  created_at   DateTime?  @db.Timestamp(6)
+  wall_post_id Int?
+  person_id    Int?
+  person       person?    @relation(fields: [person_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  wall_post    wall_post? @relation(fields: [wall_post_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model task_time_log {
+  id                  Int       @id @default(autoincrement())
+  task_id             Int
+  user_id             Int
+  date                DateTime  @db.Date
+  start_time          DateTime? @db.Timestamp(6)
+  end_time            DateTime? @db.Timestamp(6)
+  duration            Float
+  estimated_remaining Float?
+  subtask             subtask   @relation(fields: [task_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_task_time_log_task")
+  person              person    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_task_time_log_user")
+}
+
+model task_history {
+  id                Int      @id @default(autoincrement())
+  subtask_id        Int
+  previous_assignee Int?
+  new_assignee      Int?
+  action            String   // 'claimed', 'accepted', 'reassigned', etc.
+  performed_by      Int
+  created_at        DateTime @default(now())
+  
+  subtask           subtask  @relation(fields: [subtask_id], references: [id])
+  
+  @@index([subtask_id])
+}
