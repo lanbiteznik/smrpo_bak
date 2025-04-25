@@ -41,6 +41,7 @@ const StoryModal: React.FC<StoryModalProps> = ({
   const [pendingTaskUpdates, setPendingTaskUpdates] = useState<{ [key: number]: boolean }>({});
   const [isAllowedScrum, setIsAllowedScrum] = useState(false);
   const [isAllowedScrumDev, setIsAllowedScrumDev] = useState(false);
+  const [isProductOwner, setIsProductOwner] = useState(false);
   
   // Derived values - MOVE THIS BEFORE the functions that depend on it
   const isStoryLoaded = !!story && !!story.id;
@@ -70,38 +71,17 @@ const StoryModal: React.FC<StoryModalProps> = ({
       const username = session.user.username;
       const usersList = project.users;
       
-      // Allow if user is admin OR is the Scrum Master for this project
-      setIsAllowedScrum(
-        usersList.includes(`Scrum Master: ${username} `)
-      );
-    }
-  }, [session, project]);
-
-  // Add this effect under the existing permission checks
-  useEffect(() => {
-    if (session?.user?.username && project?.users) {
-      const username = session.user.username;
-      const usersList = project.users;
+      // Determine all user roles at once
+      setIsProductOwner(usersList.includes(`Product Owner: ${username}`));
+      setIsAllowedScrum(usersList.includes(`Scrum Master: ${username}`));
       
-      // Allow if user is Product Owner OR Scrum Master for this project
-      setIsAllowedScrum(
-        usersList.includes(`Scrum Master: ${username} `) || 
-        usersList.includes(`Product Owner: ${username}`)
-      );
-    }
-  }, [session, project]);
-
-  // Check developer permissions
-  useEffect(() => {
-    if (session?.user?.username && project?.users) {
-      const username = session.user.username;
-      const usersList = project.users;
+      // Get developers list
       const developersMatch = usersList.match(/Developers:\s*(.+)/);
       const developers = developersMatch ? developersMatch[1].split(",").map(dev => dev.trim()) : [];
-
-      // Allow if user is admin OR is the Scrum Master for this project
+      
+      // Allow if user is Scrum Master OR a developer
       setIsAllowedScrumDev(
-        usersList.includes(`Scrum Master: ${username} `) ||
+        usersList.includes(`Scrum Master: ${username}`) ||
         developers.includes(username)
       );
     }
@@ -258,19 +238,22 @@ const StoryModal: React.FC<StoryModalProps> = ({
                 />
               </Tab>
               
-              <Tab eventKey="tasks" title="Tasks">
-                <TasksTab 
-                  story={story}
-                  isInSprint={isInSprint}
-                  isAllowedScrum={isAllowedScrum}
-                  isAllowedScrumDev={isAllowedScrumDev}
-                  currentUserId={currentUserId}
-                  onUpdate={onUpdate}
-                  setPendingTaskUpdates={setPendingTaskUpdates}
-                  setHasUnsavedChanges={setHasUnsavedChanges}
-                  setError={setError}
-                />
-              </Tab>
+              {/* Only show Tasks tab if user is NOT a Product Owner */}
+              {!isProductOwner && (
+                <Tab eventKey="tasks" title="Tasks">
+                  <TasksTab 
+                    story={story}
+                    isInSprint={isInSprint}
+                    isAllowedScrum={isAllowedScrum}
+                    isAllowedScrumDev={isAllowedScrumDev}
+                    currentUserId={currentUserId}
+                    onUpdate={onUpdate}
+                    setPendingTaskUpdates={setPendingTaskUpdates}
+                    setHasUnsavedChanges={setHasUnsavedChanges}
+                    setError={setError}
+                  />
+                </Tab>
+              )}
               
               {allowComments && (
                 <Tab eventKey="comments" title="Comments">
