@@ -26,7 +26,8 @@ export async function PUT(request: NextRequest, ctx: { params: Promise<{ id: str
     }
 
     // Check if the subtask is assigned to the current user
-    const currentUserId = session.user.id as number;
+    const currentUserId = typeof session.user.id === 'string' ? parseInt(session.user.id, 10) : session.user.id;
+
     if (subtask.assignee !== currentUserId) {
       return NextResponse.json({ 
         error: 'You can only accept tasks assigned to you' 
