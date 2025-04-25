@@ -96,42 +96,46 @@ export async function PUT(
 
   export async function DELETE(
     req: NextRequest,
-    ctx: { params: Promise<{ id: string; lId: string }> }
+  ctx: { params: Promise<{ id: string; logId: string }> }
   ) {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-  
-    const { lId } = await ctx.params;
-    const logId = parseInt(lId);
+
+    const { id, logId } = await ctx.params;
+    console.log("ID:", id, "Log ID:", logId);
+    const logIdNum = parseInt(logId);
     const userId = Number(session.user.id);
-  
-    if (isNaN(logId)) {
+
+    console.log("Deleting log with ID:", logIdNum, typeof(logIdNum));
+
+    if (isNaN(logIdNum)) {
       return NextResponse.json({ error: "Invalid log ID" }, { status: 400 });
     }
-  
+
     try {
       const log = await prisma.task_time_log.findUnique({
-        where: { id: logId },
+        where: { id: logIdNum },
       });
-  
+
       if (!log) {
         return NextResponse.json({ error: "Log not found" }, { status: 404 });
       }
-  
+
       // Only allow user to delete their own logs
       if (log.user_id !== userId) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
-  
+
       await prisma.task_time_log.delete({
-        where: { id: logId },
+        where: { id: logIdNum },
       });
-  
+
       return NextResponse.json({ success: true });
     } catch (error) {
       console.error("Error deleting log:", error);
       return NextResponse.json({ error: "Failed to delete time log" }, { status: 500 });
     }
   }
+
