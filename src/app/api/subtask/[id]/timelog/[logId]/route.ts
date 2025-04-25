@@ -47,27 +47,27 @@ export async function PATCH(
 
 export async function PUT(
   req: NextRequest,
-  ctx: { params: Promise<{ id: string; lId: string }> }
+  ctx: { params: Promise<{ id: string; logId: string }> }
 ) {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
   
-    const { id, lId } = await ctx.params;
-    const logId = parseInt(lId);
-    const subtaskId = parseInt(id); // FIXED: use `id` instead of `subtaskId`
+    const { id, logId } = await ctx.params;
+    const logIdNum = parseInt(logId);
+    const subtaskId = parseInt(id);
     const userId = Number(session.user.id);
   
     const { duration, estimated_remaining } = await req.json();
   
-    if (isNaN(logId) || isNaN(subtaskId)) {
+    if (isNaN(logIdNum) || isNaN(subtaskId)) {
       return NextResponse.json({ error: "Invalid log or task ID" }, { status: 400 });
     }
   
     try {
       const existingLog = await prisma.task_time_log.findUnique({
-        where: { id: logId },
+        where: { id: logIdNum },
       });
   
       if (!existingLog) {
@@ -79,7 +79,7 @@ export async function PUT(
       }
   
       const updated = await prisma.task_time_log.update({
-        where: { id: logId },
+        where: { id: logIdNum },
         data: {
           duration: duration ?? existingLog.duration,
           estimated_remaining: estimated_remaining ?? existingLog.estimated_remaining,
@@ -91,51 +91,51 @@ export async function PUT(
       console.error("Error updating time log:", error);
       return NextResponse.json({ error: "Failed to update time log" }, { status: 500 });
     }
-  }
+}
   
 
-  export async function DELETE(
-    req: NextRequest,
+export async function DELETE(
+  req: NextRequest,
   ctx: { params: Promise<{ id: string; logId: string }> }
-  ) {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const { id, logId } = await ctx.params;
-    console.log("ID:", id, "Log ID:", logId);
-    const logIdNum = parseInt(logId);
-    const userId = Number(session.user.id);
-
-    console.log("Deleting log with ID:", logIdNum, typeof(logIdNum));
-
-    if (isNaN(logIdNum)) {
-      return NextResponse.json({ error: "Invalid log ID" }, { status: 400 });
-    }
-
-    try {
-      const log = await prisma.task_time_log.findUnique({
-        where: { id: logIdNum },
-      });
-
-      if (!log) {
-        return NextResponse.json({ error: "Log not found" }, { status: 404 });
-      }
-
-      // Only allow user to delete their own logs
-      if (log.user_id !== userId) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
-
-      await prisma.task_time_log.delete({
-        where: { id: logIdNum },
-      });
-
-      return NextResponse.json({ success: true });
-    } catch (error) {
-      console.error("Error deleting log:", error);
-      return NextResponse.json({ error: "Failed to delete time log" }, { status: 500 });
-    }
+) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const { id, logId } = await ctx.params;
+  console.log("ID:", id, "Log ID:", logId);
+  const logIdNum = parseInt(logId);
+  const userId = Number(session.user.id);
+
+  console.log("Deleting log with ID:", logIdNum, typeof(logIdNum));
+
+  if (isNaN(logIdNum)) {
+    return NextResponse.json({ error: "Invalid log ID" }, { status: 400 });
+  }
+
+  try {
+    const log = await prisma.task_time_log.findUnique({
+      where: { id: logIdNum },
+    });
+
+    if (!log) {
+      return NextResponse.json({ error: "Log not found" }, { status: 404 });
+    }
+
+    // Only allow user to delete their own logs
+    if (log.user_id !== userId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    await prisma.task_time_log.delete({
+      where: { id: logIdNum },
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Error deleting log:", error);
+    return NextResponse.json({ error: "Failed to delete time log" }, { status: 500 });
+  }
+}
 
