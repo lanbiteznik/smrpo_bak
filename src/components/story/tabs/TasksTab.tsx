@@ -15,6 +15,16 @@ interface Developer {
   surname: string;
 }
 
+// Add this interface near your other interfaces at the top of the file
+interface TimeLog {
+  id: number;
+  date: string;
+  duration: number;
+  estimated_remaining: number;
+  start_time: string | null;
+  end_time: string | null;
+}
+
 interface TasksTabProps {
   story: StoryProps['story'];
   isInSprint: boolean;
@@ -42,6 +52,8 @@ const TasksTab: React.FC<TasksTabProps> = ({
   const [developers, setDevelopers] = useState<Developer[]>([]);
   const [editingSubtask, setEditingSubtask] = useState<Subtask | null>(null);
   const [showEditSubtask, setShowEditSubtask] = useState(false);
+  const [totalEstimated, setTotalEstimated] = useState(0);
+  const [totalRemaining, setTotalRemaining] = useState(0);
 
   // Fetch subtasks
   const fetchSubtasks = useCallback(async () => {
@@ -308,6 +320,60 @@ const TasksTab: React.FC<TasksTabProps> = ({
     onUpdate();
   };
 
+  // Add this new function to fetch latest remaining time for a task
+  const fetchLatestRemainingTime = async (subtaskId: number): Promise<number | null> => {
+    try {
+      const response = await fetch(`/api/subtask/${subtaskId}/timelog`);
+      if (!response.ok) return null;
+      
+      const logs: TimeLog[] = await response.json();
+      if (!logs || logs.length === 0) return null;
+      
+      // Fix the reduce function by providing the initial value (logs[0])
+      const latestLog = logs.reduce<TimeLog>((a: TimeLog, b: TimeLog) => 
+        new Date(a.date) > new Date(b.date) ? a : b,
+        logs[0] // Add this initial value
+      );
+      
+      // Handle possible undefined value
+      return latestLog.estimated_remaining ?? 0;
+    } catch (error) {
+      console.error(`Error fetching logs for subtask ${subtaskId}:`, error);
+      return null;
+    }
+  };
+
+  // Modify the calculateTotals function to be async
+  useEffect(() => {
+    const fetchRemainingTimes = async () => {
+      if (!subtasks.length) return;
+      
+      let totalRequired = 0;
+      let totalRemaining = 0;
+        
+      for (const task of subtasks) {
+        // Using nullish coalescing operator (??) to handle undefined properly
+        totalRequired += task.time_required ?? 0;
+        
+        if (task.finished) {
+          totalRemaining += 0;
+        } else {
+          const latestRemaining = task.id !== undefined 
+          ? await fetchLatestRemainingTime(task.id)
+          : null;
+          
+          // Handle null and undefined properly
+          totalRemaining += latestRemaining ?? (task.time_required ?? 0);
+        }
+      }
+      
+      setTotalEstimated(totalRequired);
+      setTotalRemaining(totalRemaining);
+    };
+    
+    fetchRemainingTimes();
+  }, [subtasks]);
+
   return (
     <div>
       <div className="d-flex justify-content-between align-items-center mb-3">
@@ -375,6 +441,27 @@ const TasksTab: React.FC<TasksTabProps> = ({
         onTaskUpdated={handleTaskUpdated}
         onTaskDeleted={handleDeleteSubtask}
       />
+
+      {subtasks.length > 0 && (
+        <div className="mt-3 p-3 border-top">
+          <div className="d-flex justify-content-between align-items-center">
+            <div>
+              <strong>Task Summary:</strong>
+            </div>
+            <div>
+              <span className="me-3">
+                <span className="text-muted">Total Estimated:</span> {totalEstimated.toFixed(1)}h
+              </span>
+              <span>
+                <span className="text-muted">Total Remaining:</span> 
+                <span className={totalRemaining > 0 ? "ms-1 fw-bold" : "ms-1"}>
+                  {totalRemaining.toFixed(1)}h
+                </span>
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
