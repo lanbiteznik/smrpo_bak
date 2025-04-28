@@ -20,7 +20,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
   const now = new Date();
   const today = new Date();
-  today.setHours(0, 0, 0, 0);
 
   try {
     const existingLog = await prisma.task_time_log.findFirst({

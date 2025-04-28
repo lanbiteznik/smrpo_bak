@@ -21,6 +21,26 @@ const TaskModal: React.FC<TaskModalProps> = ({ show, onHide, task, onUpdate }) =
   const { data: session } = useSession();
   const currentUserId = session?.user?.id;
   const [timeRequired, setTimeRequired] = useState<number>(task?.time_required ?? 0);
+  const [sprintStart, setSprintStart] = useState<string>('');
+  const [sprintEnd, setSprintEnd] = useState<string>('');
+
+  useEffect(() => {
+    const fetchSprint = async () => {
+      if (task?.story_id) {
+        try {
+          const res = await fetch(`/api/story/${task.story_id}/sprint`);
+          const data = await res.json();
+          setSprintStart(data.start_date);
+          setSprintEnd(data.end_date);
+          console.log("Sprint dates:", data.start_date, data.end_date);
+        } catch (err) {
+          console.error("Failed to fetch sprint info", err);
+        }
+      }
+    };
+  
+    fetchSprint();
+  }, [task?.story_id]);  
 
   useEffect(() => {
     if (task?.time_required !== undefined) {
@@ -85,6 +105,8 @@ const TaskModal: React.FC<TaskModalProps> = ({ show, onHide, task, onUpdate }) =
             finished={task.finished}
             timeRequired={task.time_required ?? 0}
             setTimeRequired={setTimeRequired}
+            sprintStart={sprintStart}
+            sprintEnd={sprintEnd}
           />
         )}
       </Modal.Body>

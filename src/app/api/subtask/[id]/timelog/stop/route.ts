@@ -18,10 +18,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     return NextResponse.json({ error: 'Invalid task ID' }, { status: 400 });
   }
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = new Date(); 
 
   try {
+    const body = await req.json();
+
     const activeLog = await prisma.task_time_log.findFirst({
       where: {
         user_id: Number(session.user.id),
@@ -47,6 +48,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       data: {
         end_time: now,
         duration: activeLog.duration + diffHours, 
+        estimated_remaining: body.estimated_remaining
       }
     });
 

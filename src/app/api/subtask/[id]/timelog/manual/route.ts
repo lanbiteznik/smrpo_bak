@@ -12,32 +12,33 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { id: rawId } = await ctx.params;      // ctx.params is already Promise<{id:string}>
+  const { id: rawId } = await ctx.params;
   const taskId = parseInt(rawId, 10);
   if (isNaN(taskId)) {
     return NextResponse.json({ error: 'Invalid task ID' }, { status: 400 });
   }
 
   const body = await req.json();
-  const { date, duration } = body;
+  const { date, duration, estimated_remaining } = body;
 
-  if (!date || !duration || isNaN(duration)) {
+  if (!date || !duration || isNaN(duration) || estimated_remaining === undefined || isNaN(estimated_remaining)) {
     return NextResponse.json({ error: 'Invalid manual log input' }, { status: 400 });
   }
 
-  const parsedDate = new Date(date);
-  parsedDate.setHours(0, 0, 0, 0);
-
   try {
+    const { date, duration, estimated_remaining } = body;
+
+    const dateLog = new Date(date); 
+
     const newLog = await prisma.task_time_log.create({
       data: {
         task_id: taskId,
         user_id: Number(session.user.id),
-        date: parsedDate,
+        date: dateLog,
         start_time: null,
         end_time: null,
         duration,
-        estimated_remaining: 0,
+        estimated_remaining,
       },
     });
 

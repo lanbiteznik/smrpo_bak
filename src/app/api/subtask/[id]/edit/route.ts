@@ -40,8 +40,8 @@ export async function PUT(request: NextRequest, ctx: { params: Promise<{ id: str
         return NextResponse.json({ message: "No changes detected" }, { status: 200 });
     }
 
-    if (time_required <= 0 || time_required > 8) {
-        return NextResponse.json({ error: "Time required must be between 0.1 and 8 hours" }, { status: 400 });
+    if (time_required <= 0 || time_required > 160) {
+        return NextResponse.json({ error: "Time required must be between 0.1 and 160 hours" }, { status: 400 });
     }
 
     // Update the subtask

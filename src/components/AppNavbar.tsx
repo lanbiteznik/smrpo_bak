@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 import { useSession, signOut } from "next-auth/react";
-import { Navbar, Nav, Container, NavDropdown, Row } from "react-bootstrap";
+import { Navbar, Nav, Container, NavDropdown, Row, Button } from "react-bootstrap";
 import Link from "next/link";
 import { useRouter } from 'next/navigation';
 import { Person } from "@/app/models/models";
@@ -12,6 +12,10 @@ export default function AppNavbar() {
   
   // Hide navbar if the user is not logged in
   if (!session?.user) return null;
+
+  const handleOpenManual = () => {
+    window.open('/uporabniskiprirocnik.pdf', '_blank');
+  };
 
   return (
     <Navbar bg="light" expand="lg">
@@ -32,21 +36,30 @@ export default function AppNavbar() {
             }
           </Nav>
           <Nav>
+            {/* User Manual Button */}
+            <Button 
+              variant="outline-primary" 
+              className="me-3" 
+              onClick={handleOpenManual}
+            >
+              User Manual
+            </Button>
+            
             <NavDropdown title={session.user.name} id="basic-nav-dropdown">
-            <NavDropdown.Item>
-              <Row>
-                Previous login:
-              </Row>
-              <Row>
-                {session.user.previous_login
-                  ? new Date(session.user.previous_login).toLocaleString()
-                  : "No previous login"}
-              </Row>
-            </NavDropdown.Item>
-            <NavDropdown.Item onClick={() => router.push('/users/edit/' + (session.user as Person).id)}>
+              <NavDropdown.Item>
+                <Row>
+                  Previous login:
+                </Row>
+                <Row>
+                  {session.user.previous_login
+                    ? new Date(session.user.previous_login).toLocaleString()
+                    : "No previous login"}
+                </Row>
+              </NavDropdown.Item>
+              <NavDropdown.Item onClick={() => router.push('/users/edit/' + (session.user as Person).id)}>
                 Edit profile
               </NavDropdown.Item>
-            <NavDropdown.Item onClick={() => router.push('/password')}>
+              <NavDropdown.Item onClick={() => router.push('/password')}>
                 Change password
               </NavDropdown.Item>
               <NavDropdown.Item onClick={() => signOut({ callbackUrl: '/signin' })}>

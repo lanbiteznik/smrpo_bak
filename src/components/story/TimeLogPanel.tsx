@@ -26,9 +26,11 @@ interface Log {
     finished: boolean;
     timeRequired: number;
     setTimeRequired?: (value: number) => void;
+    sprintStart: string; 
+    sprintEnd: string;  
   }
   
-const TimeLogPanel: React.FC<TimeLogPanelProps> = ({ subtaskId, assignee, accepted, finished, timeRequired, setTimeRequired }) => {
+const TimeLogPanel: React.FC<TimeLogPanelProps> = ({ subtaskId, assignee, accepted, finished, timeRequired, setTimeRequired, sprintStart, sprintEnd  }) => {
   const [logs, setLogs] = useState<Log[]>([]);
   const [loading, setLoading] = useState(false);
   const [editingLogId, setEditingLogId] = useState<number | null>(null);
@@ -44,8 +46,11 @@ const TimeLogPanel: React.FC<TimeLogPanelProps> = ({ subtaskId, assignee, accept
   const [editingTimeRequired, setEditingTimeRequired] = useState(false);
   const [internalTimeRequired, setInternalTimeRequired] = useState(timeRequired);
   const [timeRequiredDraft, setTimeRequiredDraft] = useState(timeRequired);
+  const [dateValid, setDateValid] = useState<boolean>(true);
+  const [newEstimatedRemaining, setNewEstimatedRemaining] = useState<number>(0);
+  const [stopEstimatedRemaining, setStopEstimatedRemaining] = useState<number>(0);
+  const [stopTrackingError, setStopTrackingError] = useState<string | null>(null);
 
-  
   // Sync internal value if parent updates (not during editing)
   useEffect(() => {
     if (!editingTimeRequired) {
@@ -117,21 +122,41 @@ const TimeLogPanel: React.FC<TimeLogPanelProps> = ({ subtaskId, assignee, accept
       const res = await fetch(`/api/subtask/${subtaskId}/timelog/manual`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: newLogDate, duration: newLogDuration }),
+        body: JSON.stringify({ 
+          date: newLogDate, 
+          duration: newLogDuration, 
+          estimated_remaining: newEstimatedRemaining 
+        }),
       });
-      
+
+      await fetch(`/api/subtask/${subtaskId}/time-required`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ time_required: newEstimatedRemaining }),
+      });
+
+      setInternalTimeRequired(newEstimatedRemaining);
   
       if (!res.ok) throw new Error('Failed to create manual log');
   
       setNewLogDate('');
       setNewLogDuration(0);
+      setNewEstimatedRemaining(0);
       fetchLogs();
     } catch (err) {
       setError("Failed to add manual log");
       console.error(err);
     }
   };
+  
 
+  const isDateWithinSprint = (dateStr: string): boolean => {
+    if (!dateStr) return false;
+    const date = new Date(dateStr);
+    const start = new Date(sprintStart);
+    const end = new Date(sprintEnd);
+    return date >= start && date <= end;
+  };  
 
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
@@ -153,6 +178,9 @@ const TimeLogPanel: React.FC<TimeLogPanelProps> = ({ subtaskId, assignee, accept
       fetchLogs();
     }
   }, [subtaskId, fetchLogs]);
+
+  const today = new Date();
+  const todayStr = today.toISOString().split("T")[0];
 
   const handleEdit = (log: Log) => {
     setEditingLogId(log.id);
@@ -186,41 +214,84 @@ const TimeLogPanel: React.FC<TimeLogPanelProps> = ({ subtaskId, assignee, accept
 
   const handleStart = async () => {
     try {
-      const res = await fetch(`/api/subtask/${subtaskId}/timelog/start`, {
+      const resCheck = await fetch(`/api/subtask/active`, {
+        method: "GET",
+      });
+  
+      if (!resCheck.ok) {
+        throw new Error("Failed to check active tracking.");
+      }
+  
+      const data = await resCheck.json();
+  
+      if (data.active) {
+        setError("You are already tracking another task. Stop it before starting a new one.");
+        return;
+      }
+  
+      const resStart = await fetch(`/api/subtask/${subtaskId}/timelog/start`, {
         method: "POST",
       });
-      if (!res.ok) throw new Error("Already tracking?");
-      
-      setIsTracking(true); // trigger the interval immediately
   
-      setLiveDuration(prev => (prev ? prev + 1 / 3600 : null));
+      if (!resStart.ok) {
+        throw new Error("Failed to start time tracking.");
+      }
   
-      await fetchLogs(); // refresh full logs after
+      setIsTracking(true);
+      setLiveDuration(0);
+      await fetchLogs();
     } catch (err) {
-      console.error("Error starting time tracking", err);
-      setError("Failed to start time tracking.");
+      console.error("Error starting tracking:", err);
+      setError("Failed to start tracking properly.");
     }
   };
-
+  
   const hasLogForDate = (dateStr: string): boolean => {
     return logs.some(log => {
-      const logDate = new Date(log.date).toISOString().split("T")[0];
-      return logDate === dateStr;
+      const logDate = new Date(log.date);
+      const inputDate = new Date(dateStr);
+  
+      return (
+        logDate.getFullYear() === inputDate.getFullYear() &&
+        logDate.getMonth() === inputDate.getMonth() &&
+        logDate.getDate() === inputDate.getDate()
+      );
     });
   };
   
+  
   const handleStop = async () => {
+    if (stopEstimatedRemaining <= 0) {
+      setStopTrackingError("Please set the new estimated time remaining before stopping tracking.");
+      return;
+    }
+  
+    setStopTrackingError(null);
+  
     try {
       const res = await fetch(`/api/subtask/${subtaskId}/timelog/stop`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ estimated_remaining: stopEstimatedRemaining }),
       });
+  
       if (!res.ok) throw new Error("Nothing to stop?");
-      await fetchLogs();
-    } catch {
+  
+      await fetch(`/api/subtask/${subtaskId}/time-required`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ time_required: stopEstimatedRemaining }),
+      });
+  
+      setInternalTimeRequired(stopEstimatedRemaining);
+      setStopEstimatedRemaining(0);
+      fetchLogs();
+    } catch (err) {
+      console.error(err);
       setError("Failed to stop time tracking.");
     }
   };
-
+  
   function formatDuration(hours: number): string {
     const totalSeconds = Math.floor(hours * 3600);
     const h = Math.floor(totalSeconds / 3600);
@@ -245,8 +316,10 @@ const TimeLogPanel: React.FC<TimeLogPanelProps> = ({ subtaskId, assignee, accept
     accepted &&
     !finished;
 
-    const totalLogged = logs.reduce((sum, log) => sum + (log.duration || 0), 0);
-    const remaining = internalTimeRequired - totalLogged;    
+    //const totalLogged = logs.reduce((sum, log) => sum + (log.duration || 0), 0);
+    const latestLog = logs.length > 0 ? logs.reduce((a, b) => new Date(a.date) > new Date(b.date) ? a : b) : null;
+    const remaining = latestLog ? latestLog.estimated_remaining : internalTimeRequired;
+ 
 
   return (
     <div className="mt-4">
@@ -258,37 +331,70 @@ const TimeLogPanel: React.FC<TimeLogPanelProps> = ({ subtaskId, assignee, accept
         <>
             {canLogTime && (
             <div className="mb-3">
-                <h6>Manual Time Log</h6>
-                <div className="d-flex flex-wrap gap-2 align-items-center">
-                <Form.Control
+            <h6>Manual Time Log</h6>
+              <div className="d-flex flex-wrap gap-2 align-items-center">
+            
+                <Form.Group>
+                  <Form.Label>Date</Form.Label>
+                  <Form.Control
                     type="date"
                     value={newLogDate}
-                    onChange={(e) => setNewLogDate(e.target.value)}
-                    max={new Date().toISOString().split("T")[0]}
-                    />
-                    <Form.Control
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setNewLogDate(value);
+                      setDateValid(isDateWithinSprint(value) && value <= todayStr);
+                    }}
+                    min={sprintStart}
+                    max={todayStr}
+                  />
+                </Form.Group>
+            
+                <Form.Group>
+                  <Form.Label>Hours worked</Form.Label>
+                  <Form.Control
                     type="number"
-                    placeholder="Hours"
+                    placeholder="Hours worked"
                     min={0.01}
                     step={0.01}
                     value={newLogDuration}
                     onChange={(e) => setNewLogDuration(parseFloat(e.target.value))}
-                    />
-                    <Button
+                  />
+                </Form.Group>
+            
+                <Form.Group>
+                  <Form.Label>Estimated time remaining (hours)</Form.Label>
+                  <Form.Control
+                    type="number"
+                    placeholder="Estimated remaining"
+                    min={0}
+                    step={0.1}
+                    value={newEstimatedRemaining}
+                    onChange={(e) => setNewEstimatedRemaining(parseFloat(e.target.value))}
+                  />
+                </Form.Group>
+            
+                <div className="d-flex align-items-end">
+                  <Button
                     size="sm"
                     onClick={handleManualLog}
-                    disabled={hasLogForDate(newLogDate)}
-                    >
+                    disabled={hasLogForDate(newLogDate) || !dateValid}
+                  >
                     Add Log
-                    </Button>
-
-                    {hasLogForDate(newLogDate) && (
-                    <div className="text-danger small">
-                        A log already exists for this date.
-                    </div>
-                    )}
-
+                  </Button>
                 </div>
+            
+              </div>
+            
+              {hasLogForDate(newLogDate) && (
+                <div className="text-danger small mt-1">
+                  A log already exists for this date.
+                </div>
+              )}
+              {!dateValid && newLogDate && (
+                <div className="text-danger small mt-1">
+                  The selected date is outside the current sprint or in the future.
+                </div>
+              )}
             </div>
             )}
 
@@ -304,6 +410,27 @@ const TimeLogPanel: React.FC<TimeLogPanelProps> = ({ subtaskId, assignee, accept
                 <div className="text-muted">
                 👷 You must accept the task before you can log time.
                 </div>
+            )}
+            {isTracking && (
+              <div className="d-flex flex-column mt-2">
+                <Form.Group>
+                  <Form.Label>Estimated Time Remaining (after stopping)</Form.Label>
+                  <Form.Control
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    value={stopEstimatedRemaining}
+                    onChange={(e) => setStopEstimatedRemaining(parseFloat(e.target.value))}
+                    placeholder="Enter new estimated remaining time"
+                  />
+                </Form.Group>
+                {stopTrackingError && (
+                  <Alert variant="warning" className="mt-2">
+                    {stopTrackingError}
+                  </Alert>
+                )}
+
+              </div>
             )}
             </div>
         </>
@@ -322,66 +449,84 @@ const TimeLogPanel: React.FC<TimeLogPanelProps> = ({ subtaskId, assignee, accept
           <thead>
             <tr>
               <th>Date</th>
-              <th>Time logged</th>
+              <th>Time Logged</th>
+              <th>Estimated Remaining</th> 
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {logs.map((log) => (
-                <tr key={log.id} className={log.start_time && !log.end_time ? "table-warning" : ""}>
+              <tr key={log.id} className={log.start_time && !log.end_time ? "table-warning" : ""}>
                 <td>
-                    <div>{new Date(log.date).toLocaleDateString()}</div>
-                    {log.person && (
-                        <div className="text-muted small">
-                            <span className="fw-bold">{log.person.name} {log.person.lastname}</span>{" "}
-                            <span className="text-secondary">(@{log.person.username})</span>
-                        </div>
-                        )}
+                  <div>{new Date(log.date).toLocaleDateString()}</div>
+                  {log.person && (
+                    <div className="text-muted small">
+                      <span className="fw-bold">{log.person.name} {log.person.lastname}</span>{" "}
+                      <span className="text-secondary">(@{log.person.username})</span>
+                    </div>
+                  )}
+                </td>
 
-                    </td>
                 <td>
                   {editingLogId === log.id ? (
                     <Form.Control
-                        type="number"
-                        min={0}
-                        step={0.01}
-                        value={Number(editDuration.toFixed(2))}
-                        onChange={(e) => setEditDuration(parseFloat(e.target.value.replace(',', '.')))}
-                    /> 
+                      type="number"
+                      min={0}
+                      step={0.01}
+                      value={Number(editDuration.toFixed(2))}
+                      onChange={(e) => setEditDuration(parseFloat(e.target.value.replace(',', '.')))}
+                    />
                   ) : (
                     !log.end_time && liveDuration !== null
-                        ? displayTime(liveDuration)
-                        : displayTime(log.duration))}
+                      ? displayTime(liveDuration)
+                      : displayTime(log.duration)
+                  )}
                 </td>
-                <td className="text-end">
-            {!finished && log.person?.id?.toString() === currentUserId?.toString() && (
-                <div className="d-flex flex-column align-items-end gap-1">
-                {editingLogId === log.id ? (
-                    <Button size="sm" variant="primary" onClick={() => handleSave(log.id)}>
-                    Save
-                    </Button>
-                ) : (
-                    <Button
-                    size="sm"
-                    variant="outline-secondary"
-                    onClick={() => handleEdit(log)}
-                    >
-                    Edit
-                    </Button>
-                )}
-                <Button
-                    size="sm"
-                    variant="outline-danger"
-                    onClick={() => handleDelete(log.id)}
-                >
-                    Delete
-                </Button>
-                </div>
-            )}
-            </td>
 
+                <td>
+                  {editingLogId === log.id ? (
+                    <Form.Control
+                      type="number"
+                      min={0}
+                      step={0.1}
+                      value={Number(editRemaining.toFixed(2))}
+                      onChange={(e) => setEditRemaining(parseFloat(e.target.value.replace(',', '.')))}
+                    />
+                  ) : (
+                    displayTime(log.estimated_remaining)
+                  )}
+                </td>
+
+                <td className="text-end">
+                  {!finished && log.person?.id?.toString() === currentUserId?.toString() && (
+                    <div className="d-flex flex-column align-items-end gap-1">
+                      {editingLogId === log.id ? (
+                        <Button size="sm" variant="primary" onClick={() => handleSave(log.id)}>
+                          Save
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline-secondary"
+                          onClick={() => handleEdit(log)}
+                        >
+                          Edit
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="outline-danger"
+                        onClick={() => handleDelete(log.id)}
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  )}
+                </td>
               </tr>
             ))}
+
+            
             {logs.length === 0 && (
               <tr>
                 <td colSpan={4} className="text-muted text-center">
@@ -400,16 +545,16 @@ const TimeLogPanel: React.FC<TimeLogPanelProps> = ({ subtaskId, assignee, accept
             {displayTime(remaining)}
             </span>
 
-            {currentUserId == assignee && !finished && !editingTimeRequired && (
-            <Button
-                size="sm"
-                variant="link"
-                className="p-0 align-baseline ms-2"
-                onClick={() => setEditingTimeRequired(true)}
-            >
-                Edit
-            </Button>
-            )}
+            {/* //{currentUserId == assignee && !finished && !editingTimeRequired && (
+            // <Button
+            //     size="sm"
+            //     variant="link"
+            //     className="p-0 align-baseline ms-2"
+            //     onClick={() => setEditingTimeRequired(true)}
+            // >
+            //     Edit
+            // </Button>
+            //)} */}
 
             {editingTimeRequired && (
             <>
